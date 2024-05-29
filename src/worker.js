@@ -27,20 +27,17 @@ onmessage = function (evt) {
 
 let gradientInfo = null;
 
+// Store the OffscreenCanvas and the initial pixel data to be filled in.
 function setCanvasAction(workerData) {
   const gradientCanvas = workerData.canvas;
 
   const buffer = workerData.buffer;
 
-  // Set up the gradientInfo here to ensure that
-  // isProcessingPoint is set to true immediately, in case the
-  // user moves the pointer really quickly
   gradientInfo = {
     canvas: gradientCanvas,
     sourceBuffer: buffer,
     colours: null,
     rect: null,
-    isProcessingPoint: false,
   };
 
   const gradientContext = gradientCanvas.getContext("2d");
@@ -51,6 +48,9 @@ function setCanvasAction(workerData) {
   gradientContext.globalCompositeOperation = "source-in";
 }
 
+// Store the location of the first point the user clicked.
+// Do the initial fill on the OffscreenCanvas to mark the pixels
+// that will be affected by the gradient fill later.
 function setFillSourceAction(workerData) {
   const point = workerData.point;
 
@@ -92,6 +92,9 @@ function setFillSourceAction(workerData) {
     5
   );
 
+  // Store the rectangle that marks the bounds of the filled area.
+  // This is the rectangle that later we will apply the gradient to, rather than
+  // filling the entire canvas area with the gradient.
   gradientInfo.rect = {
     x: minX,
     y: minY,
@@ -103,7 +106,7 @@ function setFillSourceAction(workerData) {
 
   const gradientContext = gradientCanvas.getContext("2d");
 
-  // @ts-ignore
+  // Draw the image data with the filled pixels into the OffscreenCanvas
   gradientContext.putImageData(destImgData, 0, 0);
 
   setGradient([point, point]);
@@ -297,9 +300,11 @@ function floodFill(
   }
 }
 
+// Apply a gradient to the rectangle around the filled pixels. The two points passed in
+// define the angle and size of the gradient.
+// As the user moves the cursor further from the initial point, we increase
+// the size of the rectangle we are filling, which stretches the gradient.
 function setGradient(points) {
-  gradientInfo.isProcessingPoint = true;
-
   const { height, width } = gradientInfo.canvas;
   const { rect } = gradientInfo;
 
@@ -310,6 +315,8 @@ function setGradient(points) {
 
   const dist = getDist(points[0].x, points[0].y, points[1].x, points[1].y);
 
+  // Decide how much to increase the size of the rectangle by based on how far the user has moved
+  // the pointer from the original point.
   const percentIncrease =
     1 + (dist > 0 ? (dist * 2) / Math.max(height, width) : 0);
 
@@ -331,8 +338,6 @@ function setGradient(points) {
     angle,
     biggerRect
   );
-
-  gradientInfo.isProcessingPoint = false;
 }
 
 function fillCanvasWithGradient(
